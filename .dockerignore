@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+
+# Client directory (not needed in backend container)
+client
+
+# Build output
+dist
+out
+*.tgz
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+
+# Code coverage
+coverage
+*.lcov
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Misc
+.cache
+.eslintcache
+*.tsbuildinfo

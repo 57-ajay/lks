@@ -1,0 +1,67 @@
+services:
+  # Redis for storing trip state
+  redis:
+    image: redis/redis-stack:latest
+    container_name: cabswale-redis
+    ports:
+      - "6379:6379"
+      - "8001:8001"  # RedisInsight UI
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # LiveKit server for real-time audio streaming
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: cabswale-livekit
+    ports:
+      - "7880:7880"     # HTTP/WebSocket
+      - "7881:7881"     # TURN/TLS
+      - "7882:7882/udp" # RTC
+      - "50000-50200:50000-50200/udp"  # WebRTC port range
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+    command: ["--dev", "--node-ip=127.0.0.1"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7880"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Backend API server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cabswale-backend
+    ports:
+      - "3000:3000"
+    environment:
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+      LIVEKIT_URL: http://livekit:7880
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./src/audio:/app/src/audio
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: cabswale-network
