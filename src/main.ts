@@ -24,6 +24,12 @@ export const generateTest = async () => {
         preferences: {
             vehicleType: VEHICLE_TYPE.NONE,
             language: LANGUAGE.XX
+        },
+        user: {
+            id: "69",
+            name: "AJAY",
+            phone: "7470468734",
+
         }
     }
 

@@ -1,8 +1,6 @@
-import { HarmBlockThreshold, HarmCategory, SchemaType, type GenerateContentRequest } from "@google-cloud/vertexai";
+import { SchemaType, type GenerateContentRequest } from "@google-cloud/vertexai";
 import type { TripState } from "./types";
 import { getModel, MODELS } from "./vertex-ai";
-
-
 
 export const getPrompt = (
     todayDate: string,
@@ -10,125 +8,88 @@ export const getPrompt = (
     currentTripState: TripState
 ) => {
     return `
-TODAY_DATE: ${todayDate}
+<system_instruction>
+  <role>
+    You are a deterministic intent classifier for a cab / trip booking assistant.
+    You operate as a finite-state machine, NOT a conversational agent.
+  </role>
 
-ROLE:
-You are a deterministic intent classifier for a cab / trip booking assistant.
-You operate as a finite-state machine, not a conversational agent.
+  <context>
+    <current_date>${todayDate}</current_date>
+  </context>
 
-TASK:
-Analyze the user's latest message and decide the NEXT intent
-based on the current trip state and strict conversation flow.
+  <task>
+    Analyze the user's input (<user_transcript>) and decide the NEXT intent based on the <current_trip_state> and strict <flow_logic>.
+  </task>
 
-STRICT RULES:
-- Choose EXACTLY ONE intent.
-- Do NOT explain reasoning.
-- Do NOT invent missing information.
-- Do NOT output values outside the defined enums.
-- Only trip-related intents are supported.
+  <strict_rules>
+    <rule>Choose EXACTLY ONE intent from the allowed list.</rule>
+    <rule>Output JSON only. No markdown, no explanations.</rule>
+    <rule>Do NOT invent missing information. Use "undefined" if not specified.</rule>
+    <rule>Do NOT output values outside the defined enums.</rule>
+    <rule>If user says "any" or "doesn't matter", map to "none" or "XX".</rule>
+    <rule>Only trip-related intents are supported.</rule>
+  </strict_rules>
 
-====================
-ALLOWED ENUMS
-====================
+  <domain_knowledge>
+    <enums>
+      <intent>greet, ask_source, ask_destination, ask_trip_type, ask_date, ask_preferences, general, unknown</intent>
+      <trip_type>one_way, round_trip, not_decided</trip_type>
+      <vehicle_type>suv, sedan, hatchback, none</vehicle_type>
+      <language>en, hi, bn, ta, te, mr, gu, kn, ml, pa, or, as, ur, none</language>
+    </enums>
 
-INTENT:
-- greet
-- ask_source
-- ask_destination
-- ask_trip_type
-- ask_date
-- ask_preferences (if we have even one preference do not set intent as ASK_PREFERENCES)
-- general
-- unknown
+    <definitions>
+      <term name="user"> The user who is creating the trip </term>
+      <term name="Source">Starting location (convert to English city/place name)</term>
+      <term name="Destination">Ending location (convert to English city/place name)</term>
+      <term name="TripStartDate">Start date-time (dd/mm/yyyy hh:mm AM/PM). Example: 12/11/2026 12:26 PM</term>
+      <term name="TripEndDate">For one_way: start + 12hrs. For round_trip: explicitly provided by user.</term>
+    </definitions>
+  </domain_knowledge>
 
-TRIP_TYPE:
-- one_way
-- round_trip
-- not_decided
+  <flow_logic>
+    <step priority="1" name="Greeting">
+      If message is purely a greeting -> SET intent="greet"
+    </step>
 
-VEHICLE_TYPE:
-- suv
-- sedan
-- hatchback
-- none
+    <step priority="2" name="Mandatory Slots">
+      Check these in order. Stop at the first missing item:
+      1. If source is missing -> SET intent="ask_source"
+      2. If destination is missing -> SET intent="ask_destination"
+      3. If tripType is missing OR "not_decided" -> SET intent="ask_trip_type"
+      4. If tripStartDate is missing -> SET intent="ask_date"
+    </step>
 
-LANGUAGE:
-- en (English)
-- hi (Hindi)
-- bn (Bengali)
-- ta (Tamil)
-- te (Telugu)
-- mr (Marathi)
-- gu (Gujarati)
-- kn (Kannada)
-- ml (Malayalam)
-- pa (Punjabi)
-- or (Odia)
-- as (Assamese)
-- ur (Urdu)
-- none
+    <step priority="3" name="Preferences">
+      IF all Mandatory Slots are filled
+      AND (preferences.vehicleType is "none" OR preferences.language is "none" OR missing)
+      AND (user is NOT asking a general question)
+      -> SET intent="ask_preferences"
+    </step>
 
-# IMPORTANT:
-- If the user has not specified a value, treat it as undefined.
-- NEVER infer enum values unless the user explicitly mentions them.
-- If the user says “any”, map it to NONE / XX where applicable.
+    <step priority="4" name="General">
+      IF all Mandatory Slots are filled
+      AND user asks about price, availability, confirmation -> SET intent="general"
+    </step>
 
-====================
-FLOW LOGIC (STRICT)
-====================
+    <step priority="5" name="Fallback">
+      If unrelated to trips -> SET intent="unknown"
+    </step>
+  </flow_logic>
 
-1. Greeting:
-   - If the message is a greeting → GREET
+  <current_trip_state>
+    ${JSON.stringify(currentTripState)}
+  </current_trip_state>
 
-2. Core trip details (MANDATORY):
-   - If source is missing → ASK_SOURCE
-   - If destination is missing → ASK_DESTINATION
-   - If tripType is missing or is "not_decided" → ASK_TRIP_TYPE
-   - If tripStartDate is missing → ASK_DATE
+  <user_transcript>
+    "${userTranscript}"
+  </user_transcript>
 
-3. Preferences (OPTIONAL):
-   - If all core trip details exist
-   - If any one preference exist set preference as ASK_PREFERENCES, else
-   - AND preferences.vehicleType or preferences.language is missing
-   - AND the user is not asking a general question
-   → ASK_PREFERENCES
-
-4. General trip queries:
-   - If all mandatory details exist and the user asks about
-     price, availability, timing, confirmation, etc. → GENERAL
-
-5. Non-trip messages:
-   - If the message is unrelated to trips → UNKNOWN
-
-====================
-DEFINITIONS
-====================
-
-- Source: starting location of the trip (convert the city/place name in english)
-- Destination: ending location of the trip (convert the city/place name in english)
-- Trip Type: one_way or round_trip
-- tripStartDate: start date-time of trip (dd/mm/yyyy hh:mm AM/PM)
-  Example: 12/11/2026 12:26 PM
-- tripEndDate:
-  - For one_way: tripStartDate + 12 hours
-  - For round_trip: explicitly provided by user
-- Preferences:
-  - vehicleType
-  - language
-
-====================
-CURRENT TRIP STATE (JSON)
-====================
-${JSON.stringify(currentTripState, null, 2)}
-
-====================
-USER MESSAGE
-====================
-"${userTranscript}"
-
-====================
-OUTPUT FORMAT (JSON ONLY)
-====================
+  <output_format>
+    Generate a JSON object matching this schema. Do not include markdown code blocks.
+  </output_format>
+</system_instruction>
 `;
 };
 
@@ -142,14 +103,10 @@ export const getTripStatusWithIntent = async (userTranscript: string, tripState:
     });
 
     const prompt = getPrompt(indianTime, userTranscript, tripState);
-    const model = getModel(MODELS.FLASH, 1024);
+    const model = getModel(MODELS.FLASH, 512);
 
     const request: GenerateContentRequest = {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        safetySettings: [{
-            threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        }],
         generationConfig: {
             temperature: 0.0,
             responseMimeType: "application/json",
@@ -169,27 +126,27 @@ export const getTripStatusWithIntent = async (userTranscript: string, tripState:
                             language: { type: SchemaType.STRING },
                         },
                         required: ["vehicleType", "language"]
+                    },
+                    user: {
+                        type: SchemaType.OBJECT,
+                        properties: {
+                            id: { type: SchemaType.STRING },
+                            name: { type: SchemaType.STRING },
+                            phone: { type: SchemaType.STRING },
+                        },
+                        required: ["id", "name", "phone"]
                     }
                 },
-                required: ["intent", "source", "destination", "tripStartDate", "tripEndDate", "tripType", "preferences"]
+                required: ["intent", "source", "destination", "tripStartDate", "tripEndDate", "tripType", "preferences", "user"]
             }
         }
     }
 
-    model.generateContent(request)
-    const result = await model.generateContentStream(request);
-    const res = [];
+    const result = await model.generateContent(request);
 
-    if (result.stream) {
-        for await (const item of result.stream) {
-            if (item.candidates && item.candidates[0]?.content.parts[0]) {
-                res.push(item.candidates[0].content.parts[0].text);
-            }
-            else {
-                break;
-            }
-        }
-        return res.join("");
+    if (result.response.candidates && result.response.candidates.length > 0) {
+        //@ts-ignore
+        return result?.response?.candidates[0]?.content?.parts[0]?.text;
     } else {
         return null;
     }

@@ -8,7 +8,8 @@ const vertexAI = new VertexAI({
 
 export enum MODELS {
     FLASH = "gemini-2.5-flash",
-    FLASHLITE = "gemini-2.5-flash-lite"
+    FLASHLITE = "gemini-2.5-flash-lite",
+    FLASHLITEPREVIEW = "gemini-2.5-flash-lite-preview-09-2025",
 }
 
 export const getModel = (modelName: MODELS, maxOutTokens: number): GenerativeModel => {

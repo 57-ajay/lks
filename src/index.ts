@@ -67,14 +67,15 @@ const startServer = async (port: number): Promise<Bun.Server<any>> => {
                     // @ts-ignore
                     const formData = await req.formData();
                     const file = formData.get("file");
-                    const name = formData.get("name") as string; // TODO: Not used till now
+                    const name = formData.get("name") as string;
                     const phone = formData.get("phone") as string;
+                    const id = formData.get("id") as string;
 
                     if (!file || !(file instanceof File)) {
                         return addCors(new Response(JSON.stringify({ error: "Audio file is required" }), { status: 400 }));
                     }
-                    if (!phone) {
-                        return addCors(new Response(JSON.stringify({ error: "Phone number is required" }), { status: 400 }));
+                    if (!phone || !id || !name) {
+                        return addCors(new Response(JSON.stringify({ error: "Phone number, id and name are required" }), { status: 400 }));
                     }
 
                     let currentTripState: TripState;
@@ -90,18 +91,27 @@ const startServer = async (port: number): Promise<Bun.Server<any>> => {
                             tripEndDate: "",
                             tripStartDate: "",
                             tripType: TRIP_TYPE.NOT_DECIDED,
-                            preferences: { language: LANGUAGE.XX, vehicleType: VEHICLE_TYPE.NONE }
+                            preferences: { language: LANGUAGE.XX, vehicleType: VEHICLE_TYPE.NONE },
+                            user: {
+                                id: id,
+                                name: name,
+                                phone: phone,
+                            }
                         };
                     }
 
                     // --- STT & LLM ---
+                    console.time("transcription")
                     const transcription = await transcribeAudio(file);
+                    console.timeEnd("transcription")
+                    console.time("newTripStateJsonString")
                     const newTripStateJsonString = await getTripStatusWithIntent(transcription, currentTripState);
+                    console.timeEnd("newTripStateJsonString")
 
                     if (!newTripStateJsonString) throw new Error("LLM failed");
 
                     const newTripState = JSON.parse(newTripStateJsonString);
-                    await redis.set(`trip_state:${phone}`, JSON.stringify(newTripState), "EX", 3600);
+                    await redis.set(`trip_state:${phone}`, JSON.stringify(newTripState), "EX", 300);
 
 
                     // --- TRIGGER LIVEKIT STREAMING ---

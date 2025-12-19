@@ -47,9 +47,16 @@ export interface Preferences {
     language?: LANGUAGE;
 }
 
-
+export interface User {
+    id: string;
+    name: string;
+    phone: string;
+}
 
 export interface TripState {
+
+    user: User
+
     intent: INTENT;
 
     source?: string;
