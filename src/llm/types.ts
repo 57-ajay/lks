@@ -3,6 +3,8 @@ export enum INTENT {
     ASK_SOURCE = "ask_source",
     ASK_DESTINATION = "ask_destination",
     ASK_TRIP_TYPE = "ask_trip_type",
+    CONFIRM_TRIP = "confirm_trip",
+    CREATE_TRIP = "create_trip",
     ASK_DATE = "ask_date",
     ASK_PREFERENCES = "ask_preferences",
     GENERAL = "general",
@@ -59,6 +61,7 @@ export interface TripState {
     agentResponse?: string
 
     intent: INTENT;
+    tripCreated?: boolean;
 
     source?: string;
     destination?: string;

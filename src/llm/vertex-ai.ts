@@ -1,4 +1,5 @@
 import { GenerativeModel, HarmBlockThreshold, HarmCategory, VertexAI } from "@google-cloud/vertexai";
+import axios from "axios";
 
 const vertexAI = new VertexAI({
     project: "cabswale-ai",
@@ -8,8 +9,10 @@ const vertexAI = new VertexAI({
 
 export enum MODELS {
     FLASH = "gemini-2.5-flash",
-    FLASHLITE = "gemini-2.5-flash-lite",
-    FLASHLITEPREVIEW = "gemini-2.5-flash-lite-preview-09-2025",
+    FLASHTTS = "gemini-2.5-flash-lite-preview-tts",
+    FLASHEMBEDDING = "text-multilingual-embedding-002",
+    OPENEMBEDDINGLARGE = "multilingual-e5-large", // i guess we might have to self deploy
+    OPENEMBEDDINGSMALL = "multilingual-e5-small" // same for this too
 }
 
 export const getModel = (modelName: MODELS, maxOutTokens: number): GenerativeModel => {
@@ -24,3 +27,42 @@ export const getModel = (modelName: MODELS, maxOutTokens: number): GenerativeMod
 
     return model;
 }
+
+const PROJECT_ID = Bun.env?.PROJECT_ID;
+
+const EMBEDDING_URL = `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/asia-south2/publishers/google/models/${MODELS.FLASHEMBEDDING}:predict`;
+
+export const getEmbeddings = async (text: string): Promise<number[]> => {
+
+    const data = {
+        instances: [{
+            content: text
+        }],
+        parameters: {
+            autoTruncate: true,
+        }
+    };
+
+
+    // console.log("env: ", Bun.env?.GCLOUD_ACCESS_TOKEN);
+
+    const embeddingRequest = await axios.post(EMBEDDING_URL, data, {
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Bun.env?.GCLOUD_ACCESS_TOKEN}`,
+        }
+    });
+
+    const embeddingResponse = embeddingRequest.data;
+
+    // console.dir(embeddingResponse, { depth: null })
+
+    // console.dir(embeddingResponse?.predictions[0].embeddings.values, { depth: null });
+    const embedding = embeddingResponse?.predictions[0].embeddings.values;
+
+    if (!embedding) throw new Error("Failed to generate embedding");
+    console.log(embedding.length);
+    return embedding;
+}
+
+// getEmbeddings("A").then(x => { console.log(x); });
