@@ -1,5 +1,6 @@
 import startServer from "./src";
 
-startServer(3000).then(x => {
+const PORT = 3000;
+startServer(PORT).then(x => {
     return x
 });

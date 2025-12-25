@@ -6,11 +6,11 @@ const client = new v1beta1.TextToSpeechClient();
 export const generateAudio = async (text: string): Promise<string> => {
 
     const isHindi = /[\u0900-\u097F]/.test(text);
-    const languageCode = isHindi ? "hi-IN" : "en-US";
+    const languageCode = isHindi ? "hi-IN" : "en-IN";
 
     const request = {
         input: {
-            prompt: "Read aloud in a warm, welcoming tone.",
+            prompt: "warm and welcoming tone",
             text: text
         },
         voice: {
@@ -24,7 +24,7 @@ export const generateAudio = async (text: string): Promise<string> => {
         },
     };
 
-    console.log(`🎙️ TTS Request: Model=${request.voice.modelName}, Voice=${request.voice.name}, Lang=${languageCode}`);
+    // console.log(`TTS Request: Model=${request.voice.modelName}, Voice=${request.voice.name}, Lang=${languageCode}`);
 
     try {
         const [response] = await client.synthesizeSpeech(request);

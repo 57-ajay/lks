@@ -1,6 +1,16 @@
 import { GenerativeModel, HarmBlockThreshold, HarmCategory, VertexAI } from "@google-cloud/vertexai";
 import axios from "axios";
 
+import { GoogleAuth } from 'google-auth-library';
+
+const auth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+});
+
+const client = await auth.getClient();
+const gcloudAccessToken = await client.getAccessToken();
+
+
 const vertexAI = new VertexAI({
     project: "cabswale-ai",
     location: "asia-south1",
@@ -44,14 +54,24 @@ export const getEmbeddings = async (text: string): Promise<number[]> => {
     };
 
 
-    // console.log("env: ", Bun.env?.GCLOUD_ACCESS_TOKEN);
+    // console.log("env: ", gcloudAccessToken.token);
+    const token = gcloudAccessToken?.token;
+    if (!token) {
+        return [0.0]
+    }
 
-    const embeddingRequest = await axios.post(EMBEDDING_URL, data, {
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Bun.env?.GCLOUD_ACCESS_TOKEN}`,
-        }
-    });
+    let embeddingRequest;
+    try {
+        embeddingRequest = await axios.post(EMBEDDING_URL, data, {
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            }
+        });
+    } catch (e: any) {
+        embeddingRequest = { data: [] }
+        console.log(e.message);
+    }
 
     const embeddingResponse = embeddingRequest.data;
 
@@ -61,8 +81,8 @@ export const getEmbeddings = async (text: string): Promise<number[]> => {
     const embedding = embeddingResponse?.predictions[0].embeddings.values;
 
     if (!embedding) throw new Error("Failed to generate embedding");
-    console.log(embedding.length);
+    // console.log(embedding.length);
     return embedding;
 }
 
-// getEmbeddings("A").then(x => { console.log(x); });
+// getEmbeddings("shuaib").then(x => { console.log(x); });
